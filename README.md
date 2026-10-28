@@ -1,5 +1,7 @@
 # flutter_application_1
 
+GIT BASH HERE 
+
 1- Adicionar as alterações:
 git add. 
 
@@ -9,6 +11,11 @@ git commit -m "........"
 3- Enviar para o GitHub: 
 git push 
 
+Comando para executar os pacotes novamente :
+flutter pub get
+
+ para visualizar a tela no Chrome :
+f5 
 
 A new Flutter project.
 
