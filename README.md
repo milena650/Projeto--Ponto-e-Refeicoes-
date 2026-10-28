@@ -1,12 +1,17 @@
 # flutter_application_1
 
-1- Adicionar as alterações:
-git add. 
+1- Adicionar as alterações: 
 
-2- Criar um commit 
+git add . 
+
+2- Criar um commit: 
+
 git commit -m "........"
 
-3- Enviar para o GitHub: 
+3- :  git pull origin main --rebase
+
+4 - Enviar para o GitHub:
+
 git push 
 
 
