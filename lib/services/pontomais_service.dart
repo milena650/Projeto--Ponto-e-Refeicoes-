@@ -3,10 +3,10 @@ import 'package:http/http.dart' as http;
 import '../models/funcionario_model.dart';
 
 class PontomaisService {
-  static const String _baseUrl = 'https://api.pontomais.com.br/v2';
+  static const String _baseUrl = 'https://api.pontomais.com.br/external_api/v1';
   
   // Insira aqui o seu Token da API do Pontomais
-  static const String _token = 'SEU_TOKEN_PONTOMAIS_AQUI';
+  static const String _token = '\$2a\$12\$StZeJvb79qMce/0Yb6dj4.fG7du7GBgbY4vBoPKOycT3BN9DGbIgK';
 
   static Future<List<Funcionario>> buscarMarcacoesPorObra(String idObra, String dataFormatada) async {
     // Exemplo de endpoint: busca os registros de ponto do dia filtrando por obra
@@ -18,8 +18,10 @@ class PontomaisService {
         'Content-Type': 'application/json',
         'access-token': _token,
       },
-    );
 
+    );
+    print('STATUS CODE: ${response.statusCode}');
+    print('RESPOSTA: ${response.body}');
     if (response.statusCode == 200) {
       final body = jsonDecode(response.body);
       final List dados = body['data'] ?? [];
