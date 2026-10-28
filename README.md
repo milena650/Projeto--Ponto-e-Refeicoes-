@@ -1,5 +1,15 @@
 # flutter_application_1
 
+1- Adicionar as alterações:
+git add. 
+
+2- Criar um commit 
+git commit -m "........"
+
+3- Enviar para o GitHub: 
+git push 
+
+
 A new Flutter project.
 
 ## Getting Started
