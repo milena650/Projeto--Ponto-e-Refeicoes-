@@ -7,18 +7,18 @@ class SelecaoObraScreen extends StatelessWidget {
   const SelecaoObraScreen({super.key});
 
   final List<String> obras = const [
-    'Guaporé (RS)',
-    'Presidente Médici (RO)',
+    'Guaporé ',
+    'Presidente Médici ',
     'Serro',
     'Sítio',
-    'Vicência (PE)',
-    'Ipojuca (PE)',
-    'Porto Velho (RO)',
-    'Paracambi (RJ)',
+    'Vicência ',
+    'Ipojuca ',
+    'Porto Velho ',
+    'Paracambi',
     'Mercúrio',
-    'Bagé (RS)',
+    'Bagé ',
     'Terceirizados',
-    'Rolim de Moura (RO)',
+    'Rolim de Moura ',
     'Escritório',
   ];
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/obra_provider.dart';
+import '../models/funcionario_model.dart';
 
 class ResumoRefeicoesScreen extends StatelessWidget {
   const ResumoRefeicoesScreen({super.key});
@@ -8,6 +9,15 @@ class ResumoRefeicoesScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<ObraProvider>();
+
+    // Agrupa os funcionários por equipe dinamicamente em tempo real
+    final Map<String, List<Funcionario>> equipeMap = {};
+    for (var f in provider.funcionarios) {
+      final equipe = (f.equipe != null && f.equipe!.isNotEmpty) ? f.equipe! : 'Geral';
+      equipeMap.putIfAbsent(equipe, () => []).add(f);
+    }
+
+    final equipesKeys = equipeMap.keys.toList();
 
     return Scaffold(
       appBar: AppBar(
@@ -54,31 +64,50 @@ class ResumoRefeicoesScreen extends StatelessWidget {
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: 8.0),
                       child: Text(
-                        'Acompanhamento de Colaboradores',
+                        'Acompanhamento por Equipes',
                         style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                       ),
                     ),
                     Expanded(
-                      child: ListView.builder(
-                        itemCount: provider.funcionarios.length,
-                        itemBuilder: (context, index) {
-                          final f = provider.funcionarios[index];
-                          return ListTile(
-                            title: Text(f.nomeCompleto),
-                            subtitle: Text(
-                              'Café: ${f.temDireitoCafeManha ? "✓" : "✗"} | '
-                              'Almoço: ${f.temDireitoAlmoco ? "✓" : "✗"} | '
-                              'Tarde: ${f.temDireitoCafeTarde ? "✓" : "✗"}',
-                            ),
-                            trailing: IconButton(
-                              icon: const Icon(Icons.edit_note, color: Colors.orange),
-                              onPressed: () {
-                                // Dialog para registrar justificativa de exceção
+                      child: equipesKeys.isEmpty
+                          ? const Center(child: Text('Nenhum colaborador encontrado para esta data.'))
+                          : ListView.builder(
+                              itemCount: equipesKeys.length,
+                              itemBuilder: (context, equipeIndex) {
+                                final nomeEquipe = equipesKeys[equipeIndex];
+                                final funcionariosDaEquipe = equipeMap[nomeEquipe]!;
+
+                                return Card(
+                                  margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                  child: ExpansionTile(
+                                    initiallyExpanded: true,
+                                    title: Text(
+                                      '$nomeEquipe (${funcionariosDaEquipe.length} colaboradores)',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 15,
+                                      ),
+                                    ),
+                                    children: funcionariosDaEquipe.map((f) {
+                                      return ListTile(
+                                        title: Text(f.nomeCompleto),
+                                        subtitle: Text(
+                                          'Café: ${f.temDireitoCafeManha ? "✓" : "✗"} | '
+                                          'Almoço: ${f.temDireitoAlmoco ? "✓" : "✗"} | '
+                                          'Tarde: ${f.temDireitoCafeTarde ? "✓" : "✗"}',
+                                        ),
+                                        trailing: IconButton(
+                                          icon: const Icon(Icons.edit_note, color: Colors.orange),
+                                          onPressed: () {
+                                            // Dialog para registrar justificativa de exceção
+                                          },
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ),
+                                );
                               },
                             ),
-                          );
-                        },
-                      ),
                     ),
                   ],
                 ),

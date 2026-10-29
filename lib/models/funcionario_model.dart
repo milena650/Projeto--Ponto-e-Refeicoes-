@@ -2,20 +2,23 @@ class Funcionario {
   final String idFuncionario;
   final String nomeCompleto;
   final String idObra;
-  final String? horarioEntrada;          // 1ª Entrada
-  final String? horarioSaidaIntervalo;   // 1ª Saída
-  final String? horarioRetornoIntervalo; // 2ª Entrada
-  final String? horarioSaida;            // 2ª Saída
+  final String? equipe; // <--- Novo campo para a equipa
+  final String? horarioEntrada;
+  final String? horarioSaidaIntervalo;
+  final String? horarioRetornoIntervalo;
+  final String? horarioSaida;
 
   Funcionario({
     required this.idFuncionario,
     required this.nomeCompleto,
     required this.idObra,
+    this.equipe,
     this.horarioEntrada,
     this.horarioSaidaIntervalo,
     this.horarioRetornoIntervalo,
     this.horarioSaida,
   });
+
 
   // Regra 1: Café da Manhã (Entrada até 07:15)
   bool get temDireitoCafeManha {
