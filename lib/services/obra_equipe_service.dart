@@ -1,70 +1,73 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
-// Definimos um atalho de tipo para evitar colapsos com caracteres complexos
+// Definimos um atalho de tipo para manter a compatibilidade com o resto do projeto
 typedef MapaObrasEquipes = Map<String, List<String>>;
 
 class ObraEquipeService {
-  static const String _storageKey = 'mapeamento_obras_equipes';
+  // Referência para a coleção no Firestore
+  static final CollectionReference _colecaoObras =
+      FirebaseFirestore.instance.collection('obras_equipes');
 
-  // Salva as equipes selecionadas para uma determinada obra
+  // Salva as equipes selecionadas para uma determinada obra no Firestore
   static Future<void> salvarEquipesDaObra(String nomeObra, List<String> equipesSelecionadas) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final MapaObrasEquipes mapaAtual = await obterTodosVinculos();
+      // Usamos o nome da obra como ID do documento (ou tratamos caracteres especiais se necessário)
+      // Para segurança com IDs de documentos, podemos usar o nome diretamente ou normalizado.
+      await _colecaoObras.doc(nomeObra).set({
+        'equipes': equipesSelecionadas,
+        'atualizadoEm': FieldValue.serverTimestamp(),
+      });
       
-      mapaAtual[nomeObra] = equipesSelecionadas;
-      
-      final jsonString = jsonEncode(mapaAtual);
-      await prefs.setString(_storageKey, jsonString);
-      debugPrint('[ObraEquipeService] Sucesso ao salvar equipas para a obra: $nomeObra');
+      debugPrint('[ObraEquipeService] Sucesso ao salvar equipas no Firestore para a obra: $nomeObra');
     } catch (e, stackTrace) {
-      debugPrint('[ObraEquipeService] ERRO ao salvar equipas: $e');
+      debugPrint('[ObraEquipeService] ERRO ao salvar equipas no Firestore: $e');
       debugPrint('[ObraEquipeService] StackTrace: $stackTrace');
       rethrow;
     }
   }
 
-  // Retorna o mapa completo usando o typedef limpo
+  // Retorna o mapa completo de todas as obras e equipas a partir do Firestore
   static Future<MapaObrasEquipes> obterTodosVinculos() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final String? dadosJson = prefs.getString(_storageKey);
-      
-      if (dadosJson == null || dadosJson.isEmpty) {
-        return {};
-      }
-      
-      final decoded = jsonDecode(dadosJson);
-      if (decoded is! Map) {
-        debugPrint('[ObraEquipeService] AVISO: Dados salvos não são um Map válido.');
-        return {};
-      }
-
+      final QuerySnapshot snapshot = await _colecaoObras.get();
       MapaObrasEquipes mapaResultado = {};
-      decoded.forEach((key, value) {
-        if (value is List) {
-          mapaResultado[key.toString()] = value.map((e) => e.toString()).toList();
+
+      for (var doc in snapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>?;
+        if (data != null && data['equipes'] is List) {
+          final nomeObra = doc.id;
+          final equipes = (data['equipes'] as List).map((e) => e.toString()).toList();
+          mapaResultado[nomeObra] = equipes;
         }
-      });
+      }
 
       return mapaResultado;
     } catch (e, stackTrace) {
-      debugPrint('[ObraEquipeService] ERRO ao obter vínculos: $e');
+      debugPrint('[ObraEquipeService] ERRO ao obter vínculos do Firestore: $e');
       debugPrint('[ObraEquipeService] StackTrace: $stackTrace');
       return {};
     }
   }
 
-  // Retorna apenas as equipes vinculadas a uma obra específica
+  // Retorna apenas as equipes vinculadas a uma obra específica diretamente do documento
   static Future<List<String>> obterEquipesDaObra(String nomeObra) async {
     try {
-      final MapaObrasEquipes vinculos = await obterTodosVinculos();
-      return vinculos[nomeObra] ?? [];
+      final DocumentSnapshot doc = await _colecaoObras.doc(nomeObra).get();
+      
+      if (!doc.exists) {
+        return [];
+      }
+
+      final data = doc.data() as Map<String, dynamic>?;
+      if (data != null && data['equipes'] is List) {
+        return (data['equipes'] as List).map((e) => e.toString()).toList();
+      }
+
+      return [];
     } catch (e) {
-      debugPrint('[ObraEquipeService] ERRO ao obter equipas da obra $nomeObra: $e');
+      debugPrint('[ObraEquipeService] ERRO ao obter equipas da obra $nomeObra do Firestore: $e');
       return [];
     }
   }

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../models/funcionario_model.dart';
 import 'obra_equipe_service.dart';
@@ -7,12 +8,75 @@ class PontomaisService {
   static const String _baseUrl = 'https://api.pontomais.com.br/external_api/v1';
   static const String _token = r'$2a$12$StZeJvb79qMce/0Yb6dj4.fG7du7GBgbY4vBoPKOycT3BN9DGbIgK';
 
+  /// Busca a lista de todas as equipas ativas no Pontomais
+  static Future<List<String>> obterTodasEquipes() async {
+    try {
+      final url = Uri.parse('$_baseUrl/teams?active=true');
+      final response = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'access-token': _token,
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body);
+        final List teamsData = body['teams'] ?? body['data'] ?? [];
+
+        Set<String> equipes = {};
+        for (var t in teamsData) {
+          if (t is Map && t['name'] != null) {
+            equipes.add(t['name'].toString().trim());
+          }
+        }
+
+        // Fallback caso o endpoint /teams venha vazio
+        if (equipes.isEmpty) {
+          final empUrl = Uri.parse('$_baseUrl/employees?active=true&attributes=team');
+          final empResponse = await http.get(
+            empUrl,
+            headers: {
+              'Content-Type': 'application/json',
+              'access-token': _token,
+            },
+          );
+
+          if (empResponse.statusCode == 200) {
+            final empBody = jsonDecode(empResponse.body);
+            final List employees = empBody['employees'] ?? empBody['data'] ?? [];
+
+            for (var emp in employees) {
+              if (emp is Map && emp['team'] != null) {
+                if (emp['team'] is Map && emp['team']['name'] != null) {
+                  equipes.add(emp['team']['name'].toString().trim());
+                } else if (emp['team'] is String) {
+                  equipes.add(emp['team'].toString().trim());
+                }
+              }
+            }
+          }
+        }
+
+        List<String> listaOrdenada = equipes.toList()..sort();
+        return listaOrdenada;
+      } else {
+        debugPrint('[PontomaisService] Erro ao buscar equipes: ${response.statusCode}');
+        return [];
+      }
+    } catch (e) {
+      debugPrint('[PontomaisService] Erro ao carregar equipes do Pontomais: $e');
+      return [];
+    }
+  }
+
+  /// Busca as marcações e filtra com base nas equipas guardadas no Firestore para a obra
   static Future<List<Funcionario>> buscarMarcacoesPorObra(String idObra, String dataFormatada) async {
     try {
-      // 1. Busca as equipes associadas manualmente a esta obra através do SharedPreferences
+      // 1. Busca as equipas associadas a esta obra no Firestore
       List<String> equipesPermitidas = await ObraEquipeService.obterEquipesDaObra(idObra);
 
-      // 2. Busca a lista de colaboradores para garantir as equipes corretas
+      // 2. Busca a lista de colaboradores para garantir as equipas corretas
       final employeesUrl = Uri.parse('$_baseUrl/employees?active=true&attributes=id,name,registration_number,team');
       final empResponse = await http.get(
         employeesUrl,
@@ -94,13 +158,11 @@ class PontomaisService {
             String matricula = reg['registration_number']?.toString() ?? nome;
             String hora = reg['time']?.toString() ?? '';
 
-            // Recupera a equipe oficial do colaborador
+            // Recupera a equipa oficial do colaborador
             String nomeEquipe = dadosColaborador[matricula]?['equipe'] ?? 
                                 dadosColaborador[nome]?['equipe'] ?? 'Geral';
 
-            // --- FILTRAGEM 100% MANUAL E LIMPA ---
-            // Se houver equipes selecionadas para esta obra, valida se a equipe faz parte da lista.
-            // Se nenhuma equipe foi configurada ainda para esta obra, traz vazio ou tudo (aqui definimos que se a lista estiver vazia, não traz ou traz tudo - pode ajustar conforme preferir).
+            // --- FILTRAGEM ---
             bool pertenceAQui = equipesPermitidas.contains(nomeEquipe);
 
             // Apenas adiciona se pertencer à obra selecionada
@@ -138,13 +200,13 @@ class PontomaisService {
           ));
         });
 
-        print('Total de funcionários filtrados para a obra $idObra: ${lista.length}');
+        debugPrint('Total de funcionários filtrados para a obra $idObra: ${lista.length}');
         return lista;
       } else {
         throw Exception('Erro na API: ${response.statusCode}\n${response.body}');
       }
     } catch (e) {
-      print('Erro capturado detalhado: $e');
+      debugPrint('Erro capturado detalhado: $e');
       rethrow;
     }
   }
