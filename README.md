@@ -13,7 +13,7 @@ git commit -m "........"
 4 - Enviar para o GitHub:
 
 git push 
-
+..................................................................................
 Comando para executar os pacotes novamente :
 flutter pub get
 
@@ -21,9 +21,7 @@ flutter pub get
 f5 
 
 flutter run -d chrome --web-browser-flag "--disable-web-security"
-
-
-
+..................................................................................
 
 
 A new Flutter project.
