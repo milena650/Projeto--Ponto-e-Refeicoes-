@@ -39,14 +39,6 @@ class SelecaoObraScreenState extends State<SelecaoObraScreen> {
       appBar: AppBar(
         title: const Text('Solário - Selecionar Obra'),
         actions: [
-          // Botão para ver a lista de funcionários do PontoMais
-          IconButton(
-            icon: const Icon(Icons.people),
-            tooltip: 'Ver Funcionários',
-            onPressed: () {
-              Navigator.pushNamed(context, '/funcionarios');
-            },
-          ),
           // Botão no topo para adicionar nova obra
           IconButton(
             icon: const Icon(Icons.add),

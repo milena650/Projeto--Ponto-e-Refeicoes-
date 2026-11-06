@@ -1,87 +1,203 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:http/http.dart' as http;
 import '../models/funcionario_model.dart';
 import 'obra_equipe_service.dart';
 
 class PontomaisService {
-  // Já não precisamos de _baseUrl nem de _token aqui no Flutter,
-  // pois a segurança e o pedido à API são feitos pelo script Node.js no backend.
+  static const String _baseUrl = 'https://api.pontomais.com.br/external_api/v1';
+  static const String _token = r'$2a$12$StZeJvb79qMce/0Yb6dj4.fG7du7GBgbY4vBoPKOycT3BN9DGbIgK';
 
-  /// Busca a lista de todas as equipas ativas armazenadas no Firestore
+  /// Busca a lista de todas as equipas ativas no Pontomais
   static Future<List<String>> obterTodasEquipes() async {
     try {
-      final snapshot = await FirebaseFirestore.instance.collection('funcionarios_ponto').get();
-      Set<String> equipes = {};
+      final url = Uri.parse('$_baseUrl/teams?active=true');
+      final response = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'access-token': _token,
+        },
+      );
 
-      for (var doc in snapshot.docs) {
-        final data = doc.data();
-        final equipe = data['team'] ?? data['equipe'];
-        if (equipe != null) {
-          if (equipe is Map && equipe['name'] != null) {
-            equipes.add(equipe['name'].toString().trim());
-          } else if (equipe is String) {
-            equipes.add(equipe.toString().trim());
+     
+
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body);
+        final List teamsData = body['teams'] ?? body['data'] ?? [];
+
+        Set<String> equipes = {};
+        for (var t in teamsData) {
+          if (t is Map && t['name'] != null) {
+            equipes.add(t['name'].toString().trim());
           }
         }
-      }
 
-      // Se não encontrar nenhuma equipa específica, retorna um padrão
-      if (equipes.isEmpty) {
-        equipes.add('Geral');
-      }
+        // Fallback caso o endpoint /teams venha vazio
+        if (equipes.isEmpty) {
+          final empUrl = Uri.parse('$_baseUrl/employees?active=true&attributes=team');
+          final empResponse = await http.get(
+            empUrl,
+            headers: {
+              'Content-Type': 'application/json',
+              'access-token': _token,
+            },
+          );
 
-      List<String> listaOrdenada = equipes.toList()..sort();
-      return listaOrdenada;
+          if (empResponse.statusCode == 200) {
+            final empBody = jsonDecode(empResponse.body);
+            final List employees = empBody['employees'] ?? empBody['data'] ?? [];
+
+            for (var emp in employees) {
+              if (emp is Map && emp['team'] != null) {
+
+                if (emp['team'] is Map && emp['team']['name'] != null) {
+                  equipes.add(emp['team']['name'].toString().trim());
+
+                } else if (emp['team'] is String) {
+
+                  equipes.add(emp['team'].toString().trim());
+                }
+              }
+            }
+          }
+        }
+
+        List<String> listaOrdenada = equipes.toList()..sort();
+        return listaOrdenada;
+      } else {
+        debugPrint('[PontomaisService] Erro ao buscar equipes: ${response.statusCode}');
+        return [];
+      }
     } catch (e) {
-      debugPrint('[PontomaisService] Erro ao carregar equipes do Firestore: $e');
+      debugPrint('[PontomaisService] Erro ao carregar equipes do Pontomais: $e');
       return [];
     }
+    
+          
   }
 
-  /// Busca todos os colaboradores da obra diretamente do Firestore
+  
+
+  /// Busca todos os colaboradores da obra e identifica quem bateu ponto ou faltou
   static Future<List<Funcionario>> buscarMarcacoesPorObra(String idObra, String dataFormatada) async {
     try {
       // 1. Busca as equipas associadas a esta obra no Firestore
       List<String> equipesPermitidas = await ObraEquipeService.obterEquipesDaObra(idObra);
 
-      // 2. Busca todos os funcionários sincronizados na coleção do Firestore
-      final snapshot = await FirebaseFirestore.instance.collection('funcionarios_ponto').get();
+      // 2. Busca todos os colaboradores ativos e suas equipas
+      final employeesUrl = Uri.parse('$_baseUrl/employees?active=true&attributes=id,name,registration_number,team');
+      final empResponse = await http.get(
+        employeesUrl,
+        headers: {
+          'Content-Type': 'application/json',
+          'access-token': _token,
+        },
+      );
       
-      List<Funcionario> lista = [];
+      Map<String, Map<String, dynamic>> funcionariosMap = {};
 
-      for (var doc in snapshot.docs) {
-        final emp = doc.data();
-        String nomeEmp = emp['name']?.toString() ?? emp['nome']?.toString() ?? 'Colaborador';
-        String matEmp = emp['registration_number']?.toString() ?? doc.id;
+      if (empResponse.statusCode == 200) {
+        final empBody = jsonDecode(empResponse.body);
+        final List employees = empBody['employees'] ?? empBody['data'] ?? [];
 
-        // Extração da equipa
-        String equipeName = 'Geral';
-        var rawTeam = emp['team'] ?? emp['equipe'];
-        if (rawTeam is Map) {
-          equipeName = rawTeam['name']?.toString().trim() ?? 'Geral';
-        } else if (rawTeam != null) {
-          equipeName = rawTeam.toString().trim();
-        }
+        for (var emp in employees) {
+          if (emp is! Map) continue;
+          String nomeEmp = emp['name']?.toString() ?? 'Colaborador';
+          String matEmp = emp['registration_number']?.toString() ?? nomeEmp;
 
-        // Filtra apenas se a equipa pertence à obra selecionada (ou se não houver restrição rigorosa)
-        if (equipesPermitidas.isEmpty || equipesPermitidas.contains(equipeName)) {
-          lista.add(Funcionario(
-            idFuncionario: matEmp,
-            nomeCompleto: nomeEmp,
-            idObra: idObra,
-            equipe: equipeName,
-            horarioEntrada: null, // Preenchido futuramente se houver registo de ponto
-            horarioSaidaIntervalo: null,
-            horarioRetornoIntervalo: null,
-            horarioSaida: null,
-          ));
+          // Extração correta da equipe (tratando o objeto Map ou String)
+          String equipeName = 'Geral';
+          if (emp['team'] is Map) {
+            equipeName = emp['team']['name']?.toString().trim() ?? 'Geral';
+          } else if (emp['team'] != null) {
+            equipeName = emp['team'].toString().trim();
+          }
+
+          // Filtra apenas se a equipe pertence à obra selecionada
+          if (equipesPermitidas.contains(equipeName)) {
+            funcionariosMap[matEmp] = {
+              'nome': nomeEmp,
+              'equipe': equipeName,
+              'horarios': <String>[],
+            };
+          }
         }
       }
 
-      debugPrint('Total de funcionários mapeados para a obra $idObra via Firestore: ${lista.length}');
+      // 3. Busca o relatório de marcações (time cards) do dia para preencher quem bateu ponto
+      final url = Uri.parse('$_baseUrl/reports/time_cards');
+      final response = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'access-token': _token,
+        },
+        body: jsonEncode({
+          "report": {
+            "start_date": dataFormatada,
+            "end_date": dataFormatada,
+            "group_by": "team",
+            "row_filters": "",
+            "columns": "employee_name, registration_number, date, time",
+            "format": "json"
+          }
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body);
+        final outerData = body['data'];
+        List grupos = [];
+        if (outerData is List) {
+          for (var item in outerData) {
+            if (item is List) {
+              grupos.addAll(item);
+            } else if (item is Map) {
+              grupos.add(item);
+            }
+          }
+        }
+
+        for (var grupo in grupos) {
+          if (grupo is! Map) continue;
+          final List registros = (grupo['data'] is List) ? grupo['data'] : [];
+          for (var reg in registros) {
+            if (reg is! Map) continue;
+            String matricula = reg['registration_number']?.toString() ?? '';
+            String hora = reg['time']?.toString() ?? '';
+
+            // Se o funcionário está no mapa da obra, adiciona os horários dele
+            if (funcionariosMap.containsKey(matricula) && hora.isNotEmpty) {
+              List<String> hList = funcionariosMap[matricula]!['horarios'] as List<String>;
+              if (!hList.contains(hora)) {
+                hList.add(hora);
+              }
+            }
+          }
+        }
+      }
+
+      // 4. Constrói a lista final de funcionários (incluindo quem tem 0 horários / faltou)
+      List<Funcionario> lista = [];
+      funcionariosMap.forEach((matricula, dados) {
+        List<String> horarios = dados['horarios'] as List<String>;
+        lista.add(Funcionario(
+          idFuncionario: matricula,
+          nomeCompleto: dados['nome'],
+          idObra: idObra,
+          equipe: dados['equipe'],
+          horarioEntrada: horarios.isNotEmpty ? horarios[0] : null,
+          horarioSaidaIntervalo: horarios.length > 1 ? horarios[1] : null,
+          horarioRetornoIntervalo: horarios.length > 2 ? horarios[2] : null,
+          horarioSaida: horarios.length > 3 ? horarios[3] : null,
+        ));
+      });
+
+      debugPrint('Total de funcionários mapeados para a obra $idObra (com e sem ponto): ${lista.length}');
       return lista;
     } catch (e) {
-      debugPrint('Erro detalhado ao buscar marcações do Firestore: $e');
+      debugPrint('Erro detalhado ao buscar marcações: $e');
       rethrow;
     }
   }
